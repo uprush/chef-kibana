@@ -12,3 +12,6 @@ default['kibana']['webserver_hostname'] = node.name
 default['kibana']['webserver_aliases'] = [node.ipaddress]
 default['kibana']['webserver_listen'] = node.ipaddress
 default['kibana']['webserver_port'] = 80
+
+default['kibana']['version'] = "latest"
+default['kibana']['download_url'] = "http://download.elasticsearch.org/kibana/kibana"

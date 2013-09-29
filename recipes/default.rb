@@ -17,8 +17,6 @@
 # limitations under the License.
 #
 
-include_recipe "git"
-
 unless Chef::Config[:solo]
   es_server_results = search(:node, "roles:#{node['kibana']['es_role']} AND chef_environment:#{node.chef_environment}")
   unless es_server_results.empty?
@@ -38,15 +36,49 @@ directory node['kibana']['installdir'] do
   mode "0755"
 end
 
-git "#{node['kibana']['installdir']}/#{node['kibana']['branch']}" do
-  repository node['kibana']['repo']
-  reference node['kibana']['branch']
-  action :sync
-  user kibana_user
+ins_dir = node['kibana']['installdir']
+kibana_version = node['kibana']['version']
+
+bash "remove the kibana install directory" do
+  user    'root'
+  code    "rm -rf  #{ins_dir}/kibana-#{kibana_version}"
+
+  only_if "test -d #{ins_dir}/kibana-#{kibana_version}"
 end
 
-link "#{node['kibana']['installdir']}/current" do
-  to "#{node['kibana']['installdir']}/#{node['kibana']['branch']}"
+bash "remove the kibana current symbolic link" do
+  user    'root'
+  code    "rm -f  #{ins_dir}/current"
+
+  only_if "test -L #{ins_dir}/current"
+end
+
+# Download, extract, symlink the elasticsearch libraries and binaries
+#
+ark_prefix_root = ins_dir || node.ark[:prefix_root]
+ark_prefix_home = ins_dir || node.ark[:prefix_home]
+
+ark "kibana" do
+  url   "#{node['kibana']['download_url']}/kibana-#{kibana_version}.zip"
+  owner kibana_user
+  group kibana_user
+  version kibana_version
+  prefix_root   ark_prefix_root
+  prefix_home   ark_prefix_home
+
+  not_if do
+    link   = "#{ins_dir}/current"
+    target = "#{ins_dir}/kibana-#{kibana_version}"
+
+    ::File.directory?(link) && ::File.symlink?(link) && ::File.readlink(link) == target
+  end
+end
+
+bash "change kibana link name" do
+  cwd ins_dir
+  user kibana_user
+  code "mv kibana current"
+  only_if ::File.symlink?("kibana")
 end
 
 template "#{node['kibana']['installdir']}/current/config.js" do
@@ -54,11 +86,6 @@ template "#{node['kibana']['installdir']}/current/config.js" do
   cookbook node['kibana']['config_cookbook']
   mode "0750"
   user kibana_user
-end
-
-link "#{node['kibana']['installdir']}/current/dashboards/default.json" do
-  to "logstash.json"
-  only_if { !File::symlink?("#{node['kibana']['installdir']}/current/dashboard/default.json") }
 end
 
 include_recipe "kibana::#{node['kibana']['webserver']}"
