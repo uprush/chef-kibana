@@ -6,7 +6,7 @@ description      'Installs/Configures kibana'
 long_description IO.read(File.join(File.dirname(__FILE__), 'README.md'))
 version          '1.0.1'
 
-%w{git nginx apache2}.each do |cb|
+%w{ark git nginx apache2}.each do |cb|
   depends cb
 end
 
