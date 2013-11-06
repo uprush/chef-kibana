@@ -37,3 +37,5 @@ web_app "#{node['kibana']['webserver_hostname']}-#{node['kibana']['webserver_por
   listen_address node['kibana']['webserver_listen']
   listen_port    node['kibana']['webserver_port']
 end
+
+# TODO: basic auth (refer to: nginx.rb)
