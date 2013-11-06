@@ -1,33 +1,99 @@
 server {
   listen                <%= @listen_address %>:<%= @listen_port %>;
-  
+
   server_name           <%= @server_name %> <%= @server_aliases.join(" ") %>;
   access_log            /var/log/nginx/<%= @server_name %>.access.log;
+  error_log            /var/log/nginx/<%= @server_name %>.error.log;
+
+  client_max_body_size 50M;
 
   location / {
     root  <%= @kibana_dir %>/current;
-    index  index.html  index.htm; 
+    index  index.html  index.htm;
+    auth_basic           "Kibana";
+    auth_basic_user_file <%= @passwords_file %>;
   }
 
-  location ~ ^/_aliases$ {
+  location /es/ {
+
+    rewrite ^/es/_aliases$ /_aliases break;
+    rewrite ^/es/_nodes$ /_nodes break;
+    rewrite ^/es/(.*/_mapping)$ /$1 break;
+    return 403;
+
+    limit_except GET{
+      deny all;
+    }
+
+    auth_basic           "Kibana";
+    auth_basic_user_file <%= @passwords_file %>;
+
     proxy_pass http://<%= @es_server %>:<%= @es_port %>;
     proxy_read_timeout 90;
+
+    proxy_redirect off;
+
+    proxy_set_header  X-Real-IP  $remote_addr;
+    proxy_set_header  X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header  Host $http_host;
+
+    # For CORS Ajax
+    proxy_pass_header Access-Control-Allow-Origin;
+    proxy_pass_header Access-Control-Allow-Methods;
+    proxy_hide_header Access-Control-Allow-Headers;
+    add_header Access-Control-Allow-Headers 'X-Requested-With, Content-Type';
+    add_header Access-Control-Allow-Credentials true;
+
   }
-  location ~ ^/.*/_search$ {
+
+  location ~ ^/es/(.*/_search)$ {
+    rewrite ^/es/(.*/_search)$ /$1 break;
+
+    limit_except POST {
+        deny all;
+    }
+
     proxy_pass http://<%= @es_server %>:<%= @es_port %>;
     proxy_read_timeout 90;
+
+    proxy_redirect off;
+
+    proxy_set_header  X-Real-IP  $remote_addr;
+    proxy_set_header  X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header  Host $http_host;
+
+    # For CORS Ajax
+    proxy_pass_header Access-Control-Allow-Origin;
+    proxy_pass_header Access-Control-Allow-Methods;
+    proxy_hide_header Access-Control-Allow-Headers;
+    add_header Access-Control-Allow-Headers 'X-Requested-With, Content-Type';
+    add_header Access-Control-Allow-Credentials true;
+
+    auth_basic           "Kibana";
+    auth_basic_user_file <%= @passwords_file %>;
+
   }
-  location ~ ^/.*/_mapping$ {
+
+  location /es/kibana-int/ {
+    rewrite ^/es/(kibana-int/.*)$ /$1 break;
     proxy_pass http://<%= @es_server %>:<%= @es_port %>;
     proxy_read_timeout 90;
-  }
-  # Password protected end points
-  location ~ ^/kibana-int/dashboard/.*$ {
-    proxy_pass http://<%= @es_server %>:<%= @es_port %>;
-    proxy_read_timeout 90;
-  }
-  location ~ ^/kibana-int/temp.*$ {
-    proxy_pass http://<%= @es_server %>:<%= @es_port %>;
-    proxy_read_timeout 90;
+
+    auth_basic           "Kibana";
+    auth_basic_user_file <%= @passwords_file %>;
+
+    proxy_redirect off;
+
+    proxy_set_header  X-Real-IP  $remote_addr;
+    proxy_set_header  X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header  Host $http_host;
+
+    # For CORS Ajax
+    proxy_pass_header Access-Control-Allow-Origin;
+    proxy_pass_header Access-Control-Allow-Methods;
+    proxy_hide_header Access-Control-Allow-Headers;
+    add_header Access-Control-Allow-Headers 'X-Requested-With, Content-Type';
+    add_header Access-Control-Allow-Credentials true;
+
   }
 }

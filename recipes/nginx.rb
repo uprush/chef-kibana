@@ -33,8 +33,46 @@ template "/etc/nginx/sites-available/kibana" do
     :server_aliases => node['kibana']['webserver_aliases'],
     :kibana_dir => node['kibana']['installdir'],
     :listen_address => node['kibana']['webserver_listen'],
-    :listen_port => node['kibana']['webserver_port']
+    :listen_port => node['kibana']['webserver_port'],
+    :passwords_file => node['kibana']['nginx']['passwords_file']
   )
+end
+
+# Create proxy with HTTP authentication via Nginx
+#
+# template "#{node.elasticsearch[:nginx][:dir]}/conf.d/elasticsearch_proxy.conf" do
+#   source "elasticsearch_proxy.conf.erb"
+#   owner node.elasticsearch[:nginx][:user] and group node.elasticsearch[:nginx][:user] and mode 0755
+#   notifies :reload, 'service[nginx]'
+# end
+
+nginx_user = node['kibana']['nginx']['user']
+
+directory node['kibana']['nginx']['passwords_dir'] do
+  owner nginx_user
+  mode "0755"
+end
+
+ruby_block "add users to passwords file" do
+  block do
+    require 'webrick/httpauth/htpasswd'
+    @htpasswd = WEBrick::HTTPAuth::Htpasswd.new(node['kibana']['nginx']['passwords_file'])
+
+    node['kibana']['nginx']['users'].each do |u|
+      Chef::Log.debug "Adding user '#{u['username']}' to #{node['kibana']['nginx']['passwords_file']}\n"
+      @htpasswd.set_passwd( 'Kibana', u['username'], u['password'] )
+    end
+
+    @htpasswd.flush
+  end
+
+  not_if { node['kibana']['nginx']['users'].empty? }
+end
+
+# Ensure proper permissions and existence of the passwords file
+file node['kibana']['nginx']['passwords_file'] do
+  owner nginx_user and group nginx_user and mode 0755
+  action :touch
 end
 
 nginx_site "kibana"
